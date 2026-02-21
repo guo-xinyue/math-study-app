@@ -1,26 +1,115 @@
-name: Build iOS App
+name: Build Flutter Apps (No Local Flutter Required)
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # 手動実行ボタン
 
 jobs:
-  build:
+  # Androidビルド
+  build-android:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: 🔧 Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+    
+    - name: 🏗️ Create project structure (ios/android folders)
+      run: |
+        echo "📦 Creating Flutter project structure..."
+        flutter create --org com.mathstudy temp_project
+        
+        echo "📁 Copying android folder..."
+        cp -r temp_project/android ./
+        
+        echo "🧪 Copying test folder..."
+        mkdir -p test
+        cp -r temp_project/test/* ./test/ || true
+        
+        echo "🧹 Cleanup..."
+        rm -rf temp_project
+        
+        echo "✅ Project structure ready!"
+        ls -la
+    
+    - name: 📦 Get dependencies
+      run: flutter pub get
+    
+    - name: 🔨 Build APK
+      run: flutter build apk --release
+    
+    - name: 📤 Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: math-study-app-android.apk
+        path: build/app/outputs/flutter-apk/app-release.apk
+        retention-days: 30
+
+  # iOSビルド
+  build-ios:
+    name: 🍎 Build iOS App
     runs-on: macos-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
     
-    - uses: subosito/flutter-action@v2
+    - name: 🔧 Setup Flutter
+      uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.0'
         channel: 'stable'
+        cache: true
     
-    - run: flutter pub get
+    - name: 🏗️ Create project structure (ios/android folders)
+      run: |
+        echo "📦 Creating Flutter project structure..."
+        flutter create --org com.mathstudy temp_project
+        
+        echo "📁 Copying ios folder..."
+        cp -r temp_project/ios ./
+        
+        echo "📁 Copying macos folder..."
+        cp -r temp_project/macos ./
+        
+        echo "🧪 Copying test folder..."
+        mkdir -p test
+        cp -r temp_project/test/* ./test/ || true
+        
+        echo "🧹 Cleanup..."
+        rm -rf temp_project
+        
+        echo "✅ Project structure ready!"
+        ls -la
     
-    - run: flutter build ios --release --no-codesign
+    - name: 📦 Get dependencies
+      run: flutter pub get
     
-    - uses: actions/upload-artifact@v4
+    - name: 🔨 Build iOS (no codesign)
+      run: flutter build ios --release --no-codesign
+    
+    - name: 📦 Create IPA
+      run: |
+        cd build/ios/iphoneos
+        mkdir Payload
+        cp -r Runner.app Payload/
+        zip -r ../../../math-study-app.ipa Payload
+    
+    - name: 📤 Upload IPA
+      uses: actions/upload-artifact@v4
       with:
-        name: ios-build
-        path: build/ios/iphoneos/
+        name: math-study-app-ios.ipa
+        path: math-study-app.ipa
+        retention-days: 30
